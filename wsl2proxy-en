@@ -113,7 +113,7 @@ ${RED}[MANUAL OPERATION REQUIRED]${RAW}
 The proxy command file ${YELLOW}${socks}${RAW} is created.
 Now to make it into use for the SSH protocol:
 
-1) Edit or add the ${YELLOW}~/.ssh/config\e${RAW} file 
+1) Edit or add the ${YELLOW}~/.ssh/config\e${RAW} file
    with settings like the following content:
    (You may need to grant the writing permission first)
 ${TEAL}
@@ -163,10 +163,10 @@ setup() {
   setupSocksProxy
 
   colorEcho ${RED} "<<< AUTO ENABLE >>>"
-  echo -e "${TEAL}Note: ${RAW}Proxy server settings will be applied to 
+  echo -e "${TEAL}Note: ${RAW}Proxy server settings will be applied to
 ${YELLOW}http_proxy, https_proxy${RAW} & ${YELLOW}.gitconfig${RAW}.
 
-To auto enable the proxy on WSL startup, add the following 
+To auto enable the proxy on WSL startup, add the following
 line into ${YELLOW}$(getProfile)${RAW} (don't miss the leading '.'):
 
     ${TEAL}.${cmd} on${RAW}
@@ -178,7 +178,7 @@ loadConf() {
   if [ ! -f "${conf}" ]; then
     colorEcho ${RED} "
 The config file ${TEAL}${conf}${RED} is not found. You need to run the ${YELLOW}setup${RED} command first.
-  
+
 ${RAW}Usage:    ${cmd} setup"
     exit 1
   fi
@@ -207,6 +207,8 @@ on() {
   export http_proxy=${url}
   export https_proxy=${url}
   applyGit ${url}
+  applyKde ${host} ${port}
+  applyFirefox ${host} ${port}
   updateSocksProxy
 }
 
@@ -220,6 +222,28 @@ applyGit() {
   echo "✔️️ git configs applied."
 }
 
+# Set the proxy settings for KDE 5
+# See https://stackoverflow.com/questions/48137501/how-to-setup-network-proxy-in-kde-desktop-system
+applyKde() {
+  kwriteconfig5 --file kioslaverc --group 'Proxy Settings' --key ProxyType "1"
+  kwriteconfig5 --file kioslaverc --group 'Proxy Settings' --key Authmode 0
+  kwriteconfig5 --file kioslaverc --group 'Proxy Settings' --key httpProxy "$1:$2"
+  kwriteconfig5 --file kioslaverc --group 'Proxy Settings' --key httpsProxy "$1:$2"
+  kwriteconfig5 --file kioslaverc --group 'Proxy Settings' --key ftpProxy "ftp:$2"
+  kwriteconfig5 --file kioslaverc --group 'Proxy Settings' --key socksProxy "socks:$2"
+  dbus-send --type=signal /KIO/Scheduler org.kde.KIO.Scheduler.reparseSlaveConfiguration string:''
+}
+
+# Set the proxy settings for Firefox
+# See http://kb.mozillazine.org/User.js_file#About_the_user.js_file
+# See http://kb.mozillazine.org/User.js_file#About_the_user.js_file
+applyFirefox() {
+  for i in $HOME/.mozilla/firefox/*default*
+  do
+    echo -e "user_pref('network.proxy.type', 1);\nuser_pref('network.proxy.http', $1);\nuser_pref('network.proxy.http_port', $2);\n" > "$i/user.js"
+  done
+}
+
 # Unset all proxy settings
 off() {
   unset http_proxy
@@ -229,6 +253,13 @@ off() {
   git config --global --unset https.proxy
   git config --global --unset core.gitproxy
   echo "👋🏻️ git configs removed."
+  kwriteconfig5 --file kioslaverc --group "Proxy Settings" --key "ProxyType" 0
+  echo "👋🏻️ kde configs removed."
+  for i in $HOME/.mozilla/firefox/*default*
+  do
+    echo -e "user_pref('network.proxy.type', 0);\n" > "$i/user.js"
+  done
+  echo "👋🏻️ firefox configs removed."
   colorEcho ${RED} "
 IF PROXY IS NO LONGER NEEDED, DON'T FORGET TO:
 ${RAW}
@@ -244,7 +275,7 @@ A WSL proxy setting util.
 
     - authored by Wizcas <chen@0x1c.dev>
 
-This tool will detect the Windows host address and apply 
+This tool will detect the Windows host address and apply
 proxy settings to HTTP, HTTPS & Git automatically.
 
 Usage:
@@ -252,7 +283,7 @@ Usage:
 
 Commands:
   install  Installs the script to /usr/local/bin.
-  setup    Sets up proxy parameters (protocol, port, etc.) 
+  setup    Sets up proxy parameters (protocol, port, etc.)
            and create a helper socks proxy tool.
   on       Enables proxy settings. Works only with a proper setup.
            To execute in current env: ${TEAL}. ${cmd} on ${RAW}

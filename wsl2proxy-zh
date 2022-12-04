@@ -175,7 +175,7 @@ loadConf() {
   if [ ! -f "${conf}" ]; then
     colorEcho ${RED} "
 未找到配置文件${TEAL}${conf}${RED}，请首先执行${YELLOW}setup${RED}命令。
-  
+
 ${RAW}用法:    ${cmd} setup"
     exit 1
   fi
@@ -204,6 +204,8 @@ on() {
   export http_proxy=${url}
   export https_proxy=${url}
   applyGit ${url}
+  applyKde ${host} ${port}
+  applyFirefox ${host} ${port}
   updateSocksProxy
 }
 
@@ -217,6 +219,28 @@ applyGit() {
   echo "✔️️ git设置完毕"
 }
 
+# Set the proxy settings for KDE 5
+# See https://stackoverflow.com/questions/48137501/how-to-setup-network-proxy-in-kde-desktop-system
+applyKde() {
+  kwriteconfig5 --file kioslaverc --group 'Proxy Settings' --key ProxyType "1"
+  kwriteconfig5 --file kioslaverc --group 'Proxy Settings' --key Authmode 0
+  kwriteconfig5 --file kioslaverc --group 'Proxy Settings' --key httpProxy "$1:$2"
+  kwriteconfig5 --file kioslaverc --group 'Proxy Settings' --key httpsProxy "$1:$2"
+  kwriteconfig5 --file kioslaverc --group 'Proxy Settings' --key ftpProxy "ftp:$2"
+  kwriteconfig5 --file kioslaverc --group 'Proxy Settings' --key socksProxy "socks:$2"
+  dbus-send --type=signal /KIO/Scheduler org.kde.KIO.Scheduler.reparseSlaveConfiguration string:''
+}
+
+# Set the proxy settings for Firefox
+# See http://kb.mozillazine.org/User.js_file#About_the_user.js_file
+# See http://kb.mozillazine.org/User.js_file#About_the_user.js_file
+applyFirefox() {
+  for i in $HOME/.mozilla/firefox/*default*
+  do
+    echo -e "user_pref('network.proxy.type', 1);\nuser_pref('network.proxy.http', $1);\nuser_pref('network.proxy.http_port', $2);\n" > "$i/user.js"
+  done
+}
+
 # Unset all proxy settings
 off() {
   unset http_proxy
@@ -226,6 +250,13 @@ off() {
   git config --global --unset https.proxy
   git config --global --unset core.gitproxy
   echo "👋🏻️ 已删除git配置"
+  kwriteconfig5 --file kioslaverc --group "Proxy Settings" --key "ProxyType" 0
+  echo "👋🏻️ 已删除kde配置"
+  for i in $HOME/.mozilla/firefox/*default*
+  do
+    echo -e "user_pref('network.proxy.type', 0);\n" > "$i/user.js"
+  done
+  echo "👋🏻️ 已删除firefox配置"
   colorEcho ${RED} "
 如果不再使用代理服务器，别忘了:
 ${RAW}
